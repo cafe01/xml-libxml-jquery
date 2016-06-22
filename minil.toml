@@ -1,6 +1,5 @@
-name = "XML::LibXML::jQuery"
-# badges = ["travis"]
+name = "XML-LibXML-jQuery"
+badges = ["travis"]
 authority="cpan:CAFEGRATZ"
 
 module_maker="ModuleBuildTiny"
-
