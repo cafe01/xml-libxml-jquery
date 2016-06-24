@@ -64,7 +64,7 @@ sub new {
         # increment document data refcount
         my $doc_id = $nodes->[0]->ownerDocument->unique_key;
         $data->{$doc_id}{refcount}++;
-        # warn sprintf "[Document: %s] incrementing Q1::jQuery data ref count: %d\n", $doc_id, $data->{$doc_id}{refcount};
+        # printf STDERR "[%s] incremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
 
     }
 
@@ -739,80 +739,111 @@ sub remove_class {
 }
 
 sub data {
-    my ($self, $key, $val) = @_;
 
-    # data()
-    if (!defined $key) {
+    my $self = shift;
 
-        # class method: return whole $data (mainly for test/debug)
-        return $data unless ref $self;
+    # class method: return whole $data (mainly for test/debug)
+    return $data unless ref $self;
 
-        # instance method: return all data from first node
-        my $node = $self->{nodes}[0];
-        return unless $node;
+    # data(key, val)
+    if (@_ == 2 && defined $_[1]) {
 
-        return ($data->{$node->ownerDocument->unique_key}->{$node->unique_key} //= {});
-    }
-
-    # no nodes
-    return $self unless $self->{nodes}->[0];
-
-    # data( obj )
-    if (ref $key eq 'HASH') {
-        # TODO die if not a HASH ref
-
-        foreach my $node (@{$self->{nodes}}) {
-            my $node_data = ($data->{$node->ownerDocument->unique_key}->{$node->unique_key} //= {});
-            $node_data->{$_} = $key->{$_} for keys %$key;
-        }
+        $data->{$_->ownerDocument->unique_key}->{$_->unique_key}->{$_[0]} = $_[1]
+            foreach @{$self->{nodes}};
 
         return $self;
     }
 
-    # data( key )
-    if (! defined $val) {
-        my $node = $self->{nodes}->[0];
-        my $node_data = ($data->{$node->ownerDocument->unique_key}->{$node->unique_key} //= {});
 
-        return $node_data->{$key} if defined $node_data->{$key};
+    if (@_ == 1) {
+
+        # no nodes
+        return unless defined $self->{nodes}->[0];
+
+        # data(undefined)
+        return $self unless defined $_[0];
+
+        # data(obj)
+        if (ref $_[0]) {
+
+            die 'data(obj) only accepts a hashref' unless ref $_[0] eq 'HASH';
+
+            $data->{$_->ownerDocument->unique_key}->{$_->unique_key} = $_[0]
+                foreach @{$self->{nodes}};
+
+            return $self;
+        }
+
+        # data(key)
+        my $key = $_[0];
+        my $node = $self->{nodes}->[0];
+
+        $data->{$node->ownerDocument->unique_key}->{$node->unique_key} = {}
+            unless $data->{$node->ownerDocument->unique_key}->{$node->unique_key};
+
+        my $node_data = $data->{$node->ownerDocument->unique_key}->{$node->unique_key};
 
         # try to pull from data-* attribute
         my $data_attr = 'data-'._decamelize($key);
         $data_attr =~ tr/_/-/;
 
-        if ($node->nodeType == XML_ELEMENT_NODE && defined ($val = $node->getAttribute($data_attr))) {
-
-            # convert
-
-            # number
-            if ($val =~ /^\d+$/) {
-                $val += 0
-            }
-            # json array or object
-            elsif ($val =~ /^(?:\{|\[)/) {
-                {
-                    local $@;
-                    my $data = eval { decode_json $val };
-                    $val = $data unless $@;
-                }
-            }
-            # TODO boolean
-
-            # save on data hash for next time
-            $node_data->{$key} = $val;
-        }
+        $node_data->{$key} = _convert_data_attr_value($node->getAttribute($data_attr))
+            if !exists $node_data->{$key}
+                && $node->nodeType == XML_ELEMENT_NODE
+                && $node->hasAttribute($data_attr);
 
         return $node_data->{$key};
     }
 
-    # data( key, val)
-    foreach my $node (@{$self->{nodes}}) {
-        my $node_data = ($data->{$node->ownerDocument->unique_key}->{$node->unique_key} //= {});
-        $node_data->{$key} = $val;
+    # data()
+    if (@_ == 0) {
+
+        # return all data for first node
+        my $node = $self->{nodes}[0];
+        return unless $node;
+
+        # poor man's //= {} (for perls < 5.10)
+        exists $data->{$node->ownerDocument->unique_key}->{$node->unique_key}->{autovivify_hash};
+        my $node_data = $data->{$node->ownerDocument->unique_key}->{$node->unique_key};
+
+        # pull data-* attributes
+        foreach my $attr (grep { $_->name =~ /^data-/ } $node->attributes) {
+
+            my $key = substr($attr->name, 5);
+            $key =~ tr/-/_/;
+            $key = lcfirst _camelize($key);
+
+            next if exists $node_data->{$key};
+            $node_data->{$key} = _convert_data_attr_value($attr->value);
+        }
+
+        return $node_data;
     }
 
-    return $self;
+    $self;
 }
+
+sub _convert_data_attr_value {
+
+    # number
+    return $_[0] += 0
+        if $_[0] =~ /^\d+$/;
+
+    # json array or object
+    return decode_json($_[0])
+        if  $_[0] =~ /^(?:\{|\[)/;
+
+    # boolean
+    return JSON::true  if $_[0] eq 'true';
+    return JSON::false if $_[0] eq 'false';
+
+    # undef
+    return undef if $_[0] eq 'null' || $_[0] eq 'undefined';
+
+    # other stuff, return unmodified
+    $_[0];
+}
+
 
 
 sub _decamelize
@@ -828,6 +859,11 @@ sub _decamelize
         $s;
 }
 
+sub _camelize {
+        my $s = shift;
+        join('', map{ ucfirst $_ } split(/(?<=[A-Za-z])_(?=[A-Za-z])|\b/, $s));
+}
+
 # decrement data ref counter, delete data when counter == 0
 sub DESTROY {
     my $self = shift;
@@ -838,7 +874,7 @@ sub DESTROY {
     # decrement $data refcount
     my $doc_id = $node->ownerDocument->unique_key;
     $data->{$doc_id}{refcount}--;
-    # warn sprintf "[Document: %s] decrementing Q1::jQuery data ref count: %d\n", $doc_id, $data->{$doc_id}{refcount};
+    # printf STDERR "[%s] decremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
 
     # delete document data if refcount is 0
     delete $data->{$doc_id}
