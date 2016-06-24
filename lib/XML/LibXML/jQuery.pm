@@ -29,6 +29,13 @@ my $data = {};
 
 sub new {
     my ($class, $stuff, $before) = @_;
+    my $self;
+
+    if (ref $class) {
+        $self = $class;
+        $class = ref $self;
+    }
+
     $class = ref $class if ref $class;
 
     my $nodes;
@@ -57,7 +64,17 @@ sub new {
         } else {
             $nodes = [ _parse_html($stuff) ];
         }
+
     }
+
+    # if called as instance method, import nodes to our document
+    if (ref $self && defined $self->{nodes}[0]) {
+
+        my $doc = $self->{nodes}[0]->ownerDocument;
+        $doc->adoptNode($_)
+            for grep { $_->nodeType != XML_DOCUMENT_NODE } @$nodes;
+    }
+
 
     if (@$nodes) {
 
@@ -65,7 +82,6 @@ sub new {
         my $doc_id = $nodes->[0]->ownerDocument->unique_key;
         $data->{$doc_id}{refcount}++;
         # printf STDERR "[%s] incremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
-
     }
 
     confess "undefined node" if grep { !defined } @$nodes;
@@ -338,11 +354,21 @@ sub _node_matches {
     0;
 }
 
+# TODO add() can ruin our refcount for data()
 sub add {
-    my ($self, $stuff) = @_;
-    my $nodes = $self->new($stuff)->{nodes};
-    push @{$self->{nodes}}, @$nodes;
-    $self;
+    my ($self, $stuff, $context) = @_;
+    $context ||= $self->document;
+
+    # find(): add(selector[, context])
+    # new: add(html), add(elements), add(jQuery)
+    my $new_selection = !ref $stuff && $stuff !~ /<(?!!).*?>/
+                            ? $context->find($stuff)
+                            : $self->new($stuff);
+
+    # prepend our nodes
+    unshift @{$new_selection->{nodes}}, @{ $self->{nodes} };
+
+    $new_selection;
 }
 
 sub each {

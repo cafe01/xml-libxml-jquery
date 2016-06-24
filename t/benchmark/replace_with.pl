@@ -1,7 +1,8 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use lib 'lib';
+use FindBin;
+use lib "$FindBin::Bin/../../lib";
 use Benchmark qw(:all);
 use Web::Query::LibXML;
 use XML::LibXML::jQuery;
@@ -14,7 +15,7 @@ my $jquery = jQuery($source);
 
 my $subs = {
     q1_jquery        => create($j->find('p')),
-#    web_query_libxml => create($wq->find('p)')),
+    web_query_libxml => create($wq->find('p)')),
     jquery           => create($jquery->find('p'), 'replaceWith')
 };
 

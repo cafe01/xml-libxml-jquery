@@ -16,7 +16,7 @@ my $jquery = jQuery($source);
 my $subs = {
     q1_jquery        => create($j),
     web_query_libxml => create($wq),
-    jquery           => create($jquery)
+    # jquery           => create($jquery)
 };
 
 foreach my $name (keys %$subs) {
