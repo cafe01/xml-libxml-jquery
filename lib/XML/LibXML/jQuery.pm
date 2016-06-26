@@ -62,14 +62,6 @@ sub new {
         } else {
             $nodes = [ _parse_html($stuff) ];
         }
-
-        # # if called as instance method, import nodes to our document
-        # if (ref $self && defined $self->{nodes}[0]) {
-        #
-        #     my $doc = $self->{nodes}[0]->ownerDocument;
-        #     $doc->adoptNode($_)
-        #         for grep { $_->nodeType != XML_DOCUMENT_NODE } @$nodes;
-        # }
     }
 
     # catch bugs :)
@@ -78,9 +70,9 @@ sub new {
     # adopt nodes to existing document
     if ($existing_document) {
 
-        my $doc_id = $existing_document->unique_key;
+        # my $doc_id = $existing_document->unique_key;
         $existing_document->adoptNode($_)
-            for grep { $_->ownerDocument->unique_key != $doc_id }
+            for grep { not $existing_document->isSameNode($_->ownerDocument) }
                 grep { $_->nodeType != XML_DOCUMENT_NODE }
                 @$nodes;
     }
@@ -530,41 +522,55 @@ sub _insert_before {
 
 sub after {
     my $self = shift;
-    _insert_after($self->new(@_)->{nodes}, $self->{nodes});
+    my $content = ref $_[0] eq 'CODE'
+                  ? $_[0]
+                  : [map { @{ $self->new($_)->{nodes} } } @_];
+
+    $self->_insert_after($content, $self->{nodes});
     $self;
 }
 
 sub insert_after {
-    my $self = shift;
-    _insert_after($self->{nodes}, (ref $self)->new(@_)->{nodes});
+    my ($self, $target) = @_;
+    $target = _is_selector($target) ? $self->document->find($target)
+                                    : (ref $self)->new($target);
+
+    $self->_insert_after($self->{nodes}, $target->{nodes});
     $self;
 }
 
 sub _insert_after {
-    my ($content, $target) = @_;
-    return unless @$content;
+    my ($self, $content, $target) = @_;
+    return if ref $content eq 'ARRAY' && @$content == 0;
 
     for (my $i = 0; $i < @$target; $i++) {
 
-        my $is_last = $i == $#$target;
         my $node = $target->[ $i ];
         my $parent = $node->parentNode;
+        my $items;
 
-        # content is cloned except for last target
-        my @items = $i == $#$target ? @$content : map { $_->cloneNode(1) } @$content;
+        if (ref $content eq 'CODE') {
+            local $_ = $node;
+            $items = (ref $self)->new($content->($i, $_))->{nodes};
+        }
+        else {
+
+            # content is cloned except for last target
+            $items = $i == $#$target ? $content : [map { $_->cloneNode(1) } @$content];
+        }
 
         # thats because insertAfter() is not supported on a Document node (as of XML::LibXML 2.0017)
         unless ($parent->isa('XML::LibXML::Document')) {
 
-            $parent->insertAfter($_, $node) for @items;
+            $parent->insertAfter($_, $node) for reverse @$items;
             next;
         }
 
         # workaround for when parent is document:
         # append nodes then rotate next siblings until content is after node
-        $parent->lastChild->addSibling($_) for @items;
+        $parent->lastChild->addSibling($_) for @$items;
         # warn "# rotating until $items[0] is after to $node\n";
-        while (not $node->nextSibling->isSameNode($items[0])) {
+        while (not $node->nextSibling->isSameNode($items->[0])) {
             my $next = $node->nextSibling;
             # warn "#    - next: $next\n";
             # $next->unbindNode;
@@ -906,6 +912,14 @@ sub _camelize {
         join('', map{ ucfirst $_ } split(/(?<=[A-Za-z])_(?=[A-Za-z])|\b/, $s));
 }
 
+sub _is_selector {
+    defined $_[0]
+    && !ref $_[0]
+    && length $_[0]
+    && $_[0] !~ /<(?!!).*?>/
+}
+
+
 # decrement data ref counter, delete data when counter == 0
 sub DESTROY {
     my $self = shift;
@@ -922,6 +936,10 @@ sub DESTROY {
     delete $data->{$doc_id}
         if $data->{$doc_id}{refcount} == 0;
 }
+
+
+# TODO create camelized methods alias
+
 
 
 1;
@@ -1013,15 +1031,15 @@ Implemented signatures:
 
 =over
 
-=item B<add>(Str B<selector>)
+=item add(selector)
 
-=item B<add>(Str B<selector>, XML::LibXML::jQuery B<context>)
+=item add(selector, L<context|XML::LibXML::jQuery>)
 
-=item B<add>(Str B<html>)
+=item add(html)
 
-=item B<add>(ArrayRef[L<XML::LibXML::Node>] B<elements>)
+=item add(L<elements|XML::LibXML::Node>)
 
-=item B<add>(XML::LibXML::jQuery B<selection>)
+=item add(L<selection|XML::LibXML::jQuery>)
 
 =back
 
@@ -1029,7 +1047,31 @@ Documentation and examples at L<http://api.jquery.com/add/>.
 
 =head2 add_class
 
+Implemented signatures:
+
+=over
+
+=item add_class(className)
+
+=item add_class(function)
+
+=back
+
+Documentation and examples at L<http://api.jquery.com/addClass/>.
+
 =head2 after
+
+Implemented signatures:
+
+=over
+
+=item after(content[, content])
+
+=item after(function)
+
+=back
+
+Documentation and examples at L<http://api.jquery.com/after/>.
 
 =head2 append
 
@@ -1053,11 +1095,11 @@ Implemented signatures:
 
 =over
 
-=item B<data>(Str B<key>, Any B<value>)
+=item data(key, value)
 
-=item B<data>(Str B<key>)
+=item data(key)
 
-=item B<data>(HashRef B<obj>)
+=item data(obj)
 
 =back
 
@@ -1080,6 +1122,18 @@ Documentation and examples at L<http://api.jquery.com/data/>.
 =head2 html
 
 =head2 insert_after
+
+Implemented signatures:
+
+=over
+
+=item insert_after(target)
+
+All targets supported: selector, element, array of elements, HTML string, or jQuery object.
+
+=back
+
+Documentation and examples at L<http://api.jquery.com/insertAfter/>.
 
 =head2 insert_before
 

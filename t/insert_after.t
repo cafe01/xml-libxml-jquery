@@ -6,24 +6,36 @@ use Test::More;
 use XML::LibXML::jQuery;
 
 
+sub test (&@);
 my $html = '<div class="container"><h2>Greetings</h2><div class="inner">Hello</div><div class="inner">Goodbye</div></div>';
 
-my $j = j($html);
 
-j('<p>Test</p>')->insert_after($j->find('.inner'));
+test { $_->new('<p/>')->insert_after($_->find('h2, .inner')->{nodes}) } 'insert_after(arrayref)';
 
-is $j->as_html,
-    '<div class="container"><h2>Greetings</h2><div class="inner">Hello</div><p>Test</p><div class="inner">Goodbye</div><p>Test</p></div>', 'new content';
+test { $_->new('<p/>')->insert_after($_->find('.inner')->add('h2')) } 'insert_after(jQuery)';
 
-$j = j($html);
-is $j->find('h2')->insert_after($j->find('.inner'))->end->as_html, '<div class="container"><div class="inner">Hello</div><h2>Greetings</h2><div class="inner">Goodbye</div><h2>Greetings</h2></div>', 'existing element';
+test { $_->new('<p/>')->insert_after('h2, .inner') } 'insert_after(selector)';
 
-$j = j('<div/>');
-j('<span/>')->insert_after($j);
-is $j->document->as_html, "<div></div><span></span>\n", 'on root node';
+test { $_->find('h2')->insert_after('.inner:last-child') }
+     'insert_after(selector) (move)',
+     '<div class="container"><div class="inner">Hello</div><div class="inner">Goodbye</div><h2>Greetings</h2></div>';
 
-
-
+test { $_->find('h2')->insert_after($_->find('.inner:last-child')->get(0)) }
+     'insert_after(element)',
+     '<div class="container"><div class="inner">Hello</div><div class="inner">Goodbye</div><h2>Greetings</h2></div>';
 
 
 done_testing;
+
+
+
+
+sub test (&@) {
+    my ($cb, $name, $expected) = @_;
+
+    $expected ||= '<div class="container"><h2>Greetings</h2><p></p><div class="inner">Hello</div><p></p><div class="inner">Goodbye</div><p></p></div>';
+    my $j = j($html);
+    local $_ = $j;
+    $cb->($j);
+    is $j->as_html, $expected, $name;
+}
