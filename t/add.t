@@ -10,16 +10,28 @@ sub test (&@);
 
 test { shift->add('div > bar') } "add(selector)";
 
-test { my $orig = shift; $orig->add('bar', $orig->document->find('baz')) } "add(selector, context)";
+test {
+    my $orig = shift;
+    $orig->add('bar', $orig->document->find('baz'));
+} "add(selector, context)";
 
 test {
     my $orig = shift;
-    $orig->add($orig->document->find('div > bar')->{nodes})
+    $orig->add($orig->document->find('div > bar')->{nodes});
 } "add(elements)";
 
-test { shift->add('<bar/>') } "add(html)";
+test {
+    my $orig = shift;
+    my $new = $orig->add('<bar/>')->append_to($orig->parent); # append to render as html
+    $new;
+} "add(html)";
 
-test { shift->add(j('<bar/>')) } "add(jQuery)";
+test {
+    my $orig = shift;
+    my $new = $orig->add(j('<bar/>'))->append_to($orig->parent); # append to render as html
+    $new;
+} "add(jQuery)";
+
 
 done_testing;
 
@@ -46,6 +58,6 @@ sub test (&@) {
         isnt $orig_obj, $new_obj, "returns new object";
         is $orig_obj->size, 1, 'orig object size';
         is $new_obj->size, 2, 'new object size';
-        is $new_obj->as_html, '<foo/><bar/>', 'output';
+        is $new_obj->as_html, '<foo></foo><bar></bar>', 'output';
     };
 }

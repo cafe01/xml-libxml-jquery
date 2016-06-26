@@ -10,7 +10,7 @@ use HTML::Selector::XPath qw/selector_to_xpath/;
 use Carp qw/ confess /;
 use JSON qw/ decode_json /;
 
-our $VERSION = "0.01";
+our $VERSION = "0.02";
 our @EXPORT = qw/ j /;
 
 use constant {
@@ -29,16 +29,14 @@ my $data = {};
 
 sub new {
     my ($class, $stuff, $before) = @_;
-    my $self;
+    my ($self, $existing_document, $nodes);
 
+    # instance method, reuse document
     if (ref $class) {
         $self = $class;
         $class = ref $self;
+        $existing_document = $self->{document};
     }
-
-    $class = ref $class if ref $class;
-
-    my $nodes;
 
     if (blessed $stuff) {
 
@@ -65,27 +63,41 @@ sub new {
             $nodes = [ _parse_html($stuff) ];
         }
 
+        # # if called as instance method, import nodes to our document
+        # if (ref $self && defined $self->{nodes}[0]) {
+        #
+        #     my $doc = $self->{nodes}[0]->ownerDocument;
+        #     $doc->adoptNode($_)
+        #         for grep { $_->nodeType != XML_DOCUMENT_NODE } @$nodes;
+        # }
     }
 
-    # if called as instance method, import nodes to our document
-    if (ref $self && defined $self->{nodes}[0]) {
-
-        my $doc = $self->{nodes}[0]->ownerDocument;
-        $doc->adoptNode($_)
-            for grep { $_->nodeType != XML_DOCUMENT_NODE } @$nodes;
-    }
-
-
-    if (@$nodes) {
-
-        # increment document data refcount
-        my $doc_id = $nodes->[0]->ownerDocument->unique_key;
-        $data->{$doc_id}{refcount}++;
-        # printf STDERR "[%s] incremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
-    }
-
+    # catch bugs :)
     confess "undefined node" if grep { !defined } @$nodes;
-    bless({ nodes => $nodes, before => $before }, $class);
+
+    # adopt nodes to existing document
+    if ($existing_document) {
+
+        my $doc_id = $existing_document->unique_key;
+        $existing_document->adoptNode($_)
+            for grep { $_->ownerDocument->unique_key != $doc_id }
+                grep { $_->nodeType != XML_DOCUMENT_NODE }
+                @$nodes;
+    }
+
+    my $document = defined $nodes->[0] ? $nodes->[0]->ownerDocument
+                                       : XML::LibXML->createDocument;
+
+    # increment document data refcount
+    my $doc_id = $document->unique_key;
+    $data->{$doc_id}{refcount}++;
+    # printf STDERR "[%s] incremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
+
+    bless {
+        document => $document,
+        nodes => $nodes,
+        before => $before
+    }, $class;
 }
 
 
@@ -159,7 +171,7 @@ sub end {
 
 sub document {
     my $self = shift;
-    $self->new([ $self->{nodes}[0] ? $self->{nodes}[0]->ownerDocument : () ], $self);
+    $self->new([ $self->{document} ], $self);
 }
 
 sub tagname {
@@ -199,16 +211,20 @@ sub as_html {
         # TODO benchmark as_html() using can() vs nodeType to detect document nodes
         # best method, but only document nodes can toStringHTML()
         if ($_->can('toStringHTML')) {
+            # printf STDERR "%s: toStringHTML\n", ref $_;
             $output .= $_->toStringHTML;
             next;
         }
 
+
         # second best is to call toStringC14N(1), which generates valid HTML (eg. no auto closed <div/>),
         # but dies on some cases with "Failed to convert doc to string in doc->toStringC14N" error.
         # so we fallback to toString()
+        # the most common case where toStringC14N fails is unbound nodes (getOwner returns a DocumentFragment)
         {
             local $@; # protect existing $@
             my $html = eval { $_->toStringC14N(1) };
+            # printf STDERR "%s: %s\n", ref $_->getOwner, ($@ ? "toString: $@" : 'toStringC14N');
             $output .= $@ ? $_->toString : $html;
         }
     }
@@ -393,7 +409,7 @@ sub append {
 
 sub append_to {
     my $self = shift;
-    _append_to($self->{nodes}, $self->new(@_)->{nodes});
+    _append_to($self->{nodes}, (ref $self)->new(@_)->{nodes});
     $self;
 }
 
@@ -430,7 +446,7 @@ sub prepend {
 
 sub prepend_to {
     my $self = shift;
-    _prepend_to($self->{nodes}, $self->new(@_)->{nodes});
+    _prepend_to($self->{nodes}, (ref $self)->new(@_)->{nodes});
     $self;
 }
 
@@ -474,7 +490,7 @@ sub before {
 
 sub insert_before {
     my $self = shift;
-    _insert_before($self->{nodes}, $self->new(@_)->{nodes});
+    _insert_before($self->{nodes}, (ref $self)->new(@_)->{nodes});
     $self;
 }
 
@@ -520,7 +536,7 @@ sub after {
 
 sub insert_after {
     my $self = shift;
-    _insert_after($self->{nodes}, $self->new(@_)->{nodes});
+    _insert_after($self->{nodes}, (ref $self)->new(@_)->{nodes});
     $self;
 }
 
@@ -993,6 +1009,24 @@ Unless otherwise noted, all methods behave exactly like the javascript version.
 
 =head2 add
 
+Implemented signatures:
+
+=over
+
+=item B<add>(Str B<selector>)
+
+=item B<add>(Str B<selector>, XML::LibXML::jQuery B<context>)
+
+=item B<add>(Str B<html>)
+
+=item B<add>(ArrayRef[L<XML::LibXML::Node>] B<elements>)
+
+=item B<add>(XML::LibXML::jQuery B<selection>)
+
+=back
+
+Documentation and examples at L<http://api.jquery.com/add/>.
+
 =head2 add_class
 
 =head2 after
@@ -1014,6 +1048,20 @@ Unless otherwise noted, all methods behave exactly like the javascript version.
 =head2 contents
 
 =head2 data
+
+Implemented signatures:
+
+=over
+
+=item B<data>(Str B<key>, Any B<value>)
+
+=item B<data>(Str B<key>)
+
+=item B<data>(HashRef B<obj>)
+
+=back
+
+Documentation and examples at L<http://api.jquery.com/data/>.
 
 =head2 detach
 

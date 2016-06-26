@@ -75,6 +75,16 @@ Unless otherwise noted, all methods behave exactly like the javascript version.
 
 ## add
 
+Implemented signatures:
+
+- **add**(Str **selector**)
+- **add**(Str **selector**, XML::LibXML::jQuery **context**)
+- **add**(Str **html**)
+- **add**(ArrayRef\[[XML::LibXML::Node](https://metacpan.org/pod/XML::LibXML::Node)\] **elements**)
+- **add**(XML::LibXML::jQuery **selection**)
+
+Documentation and examples at [http://api.jquery.com/add/](http://api.jquery.com/add/).
+
 ## add\_class
 
 ## after
@@ -96,6 +106,14 @@ Unless otherwise noted, all methods behave exactly like the javascript version.
 ## contents
 
 ## data
+
+Implemented signatures:
+
+- **data**(Str **key**, Any **value**)
+- **data**(Str **key**)
+- **data**(HashRef **obj**)
+
+Documentation and examples at [http://api.jquery.com/data/](http://api.jquery.com/data/).
 
 ## detach
 
