@@ -77,17 +77,31 @@ Unless otherwise noted, all methods behave exactly like the javascript version.
 
 Implemented signatures:
 
-- **add**(Str **selector**)
-- **add**(Str **selector**, XML::LibXML::jQuery **context**)
-- **add**(Str **html**)
-- **add**(ArrayRef\[[XML::LibXML::Node](https://metacpan.org/pod/XML::LibXML::Node)\] **elements**)
-- **add**(XML::LibXML::jQuery **selection**)
+- add(selector)
+- add(selector, [context](https://metacpan.org/pod/XML::LibXML::jQuery))
+- add(html)
+- add([elements](https://metacpan.org/pod/XML::LibXML::Node))
+- add([selection](https://metacpan.org/pod/XML::LibXML::jQuery))
 
 Documentation and examples at [http://api.jquery.com/add/](http://api.jquery.com/add/).
 
 ## add\_class
 
+Implemented signatures:
+
+- add\_class(className)
+- add\_class(function)
+
+Documentation and examples at [http://api.jquery.com/addClass/](http://api.jquery.com/addClass/).
+
 ## after
+
+Implemented signatures:
+
+- after(content\[, content\])
+- after(function)
+
+Documentation and examples at [http://api.jquery.com/after/](http://api.jquery.com/after/).
 
 ## append
 
@@ -109,9 +123,9 @@ Documentation and examples at [http://api.jquery.com/add/](http://api.jquery.com
 
 Implemented signatures:
 
-- **data**(Str **key**, Any **value**)
-- **data**(Str **key**)
-- **data**(HashRef **obj**)
+- data(key, value)
+- data(key)
+- data(obj)
 
 Documentation and examples at [http://api.jquery.com/data/](http://api.jquery.com/data/).
 
@@ -132,6 +146,14 @@ Documentation and examples at [http://api.jquery.com/data/](http://api.jquery.co
 ## html
 
 ## insert\_after
+
+Implemented signatures:
+
+- insert\_after(target)
+
+    All targets supported: selector, element, array of elements, HTML string, or jQuery object.
+
+Documentation and examples at [http://api.jquery.com/insertAfter/](http://api.jquery.com/insertAfter/).
 
 ## insert\_before
 

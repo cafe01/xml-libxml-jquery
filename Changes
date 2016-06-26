@@ -2,9 +2,9 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
-    - fixed after(content[, content]) signature
-    - implemented after(function) signature
-    - insert_after(target) signature fully implemented
+    - fixed before/after(content[, content]) signature
+    - implemented before/after(function) signature
+    - insert_before/insert_after(target) signature fully implemented
       - target = selector, element, arrayref of elements, HTML string, or jQuery object
 
 0.02 2016-06-26T15:07:06Z

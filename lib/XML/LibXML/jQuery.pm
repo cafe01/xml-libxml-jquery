@@ -10,7 +10,7 @@ use HTML::Selector::XPath qw/selector_to_xpath/;
 use Carp qw/ confess /;
 use JSON qw/ decode_json /;
 
-our $VERSION = "0.02";
+our $VERSION = "0.03";
 our @EXPORT = qw/ j /;
 
 use constant {
@@ -476,42 +476,56 @@ sub _prepend_to {
 
 sub before {
     my $self = shift;
-    _insert_before($self->new(@_)->{nodes}, $self->{nodes});
+    my $content = ref $_[0] eq 'CODE'
+                  ? $_[0]
+                  : [map { @{ $self->new($_)->{nodes} } } @_];
+
+    $self->_insert_before($content, $self->{nodes});
     $self;
 }
 
 sub insert_before {
-    my $self = shift;
-    _insert_before($self->{nodes}, (ref $self)->new(@_)->{nodes});
+    my ($self, $target) = @_;
+    $target = _is_selector($target) ? $self->document->find($target)
+                                    : (ref $self)->new($target);
+
+    $self->_insert_before($self->{nodes}, $target->{nodes});
     $self;
 }
 
 sub _insert_before {
-    my ($content, $target) = @_;
-    return unless @$content;
+    my ($self, $content, $target) = @_;
+    return if ref $content eq 'ARRAY' && @$content == 0;
 
     for (my $i = 0; $i < @$target; $i++) {
 
         my $is_last = $i == $#$target;
         my $node = $target->[ $i ];
         my $parent = $node->parentNode;
+        my $items;
 
-        # content is cloned except for last target
-        my @items = $i == $#$target ? @$content : map { $_->cloneNode(1) } @$content;
+        if (ref $content eq 'CODE') {
+            local $_ = $node;
+            $items = (ref $self)->new($content->($i, $_))->{nodes};
+        }
+        else {
+            # content is cloned except for last target
+            $items = $i == $#$target ? $content : [map { $_->cloneNode(1) } @$content];
+        }
 
         # thats because insertAfter() is not supported on a Document node (as of XML::LibXML 2.0017)
         unless ($parent->isa('XML::LibXML::Document')) {
 
-            $parent->insertBefore($_, $node) for @items;
+            $parent->insertBefore($_, $node) for @$items;
             next;
         }
 
         # workaround for when parent is document:
         # append nodes then rotate until content is before node
-        $parent->lastChild->addSibling($_) for @items;
+        $parent->lastChild->addSibling($_) for @$items;
 
         my $next = $node;
-        while (not $next->isSameNode($items[0])) {
+        while (not $next->isSameNode($items->[0])) {
             my $node_to_move = $next;
             $next = $node_to_move->nextSibling;
             $parent->lastChild->addSibling($node_to_move);
