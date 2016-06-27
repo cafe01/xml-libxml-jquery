@@ -3,7 +3,7 @@ package XML::LibXML::jQuery;
 use 5.008001;
 use strict;
 use warnings;
-use parent qw/Exporter/;
+use Exporter qw(import);
 use Scalar::Util qw/ blessed /;
 use XML::LibXML;
 use HTML::Selector::XPath qw/selector_to_xpath/;
@@ -23,6 +23,9 @@ use constant {
 };
 
 our ($PARSER);
+
+# plugin functions
+our %fn;
 
 # for data()
 my $data = {};
@@ -384,9 +387,9 @@ sub each {
 
     for (my $i = 0; $i < @{$self->{nodes}}; $i++) {
 
-        local $_ = $self->new($self->{nodes}[$i]);
+        local $_ = $self->{nodes}[$i];
         my @rv = $cb->($i, $_);
-        last if @rv == 1 && ! defined $rv[0];
+        last if @rv == 1 && !defined $rv[0];
     }
 
     $self;
