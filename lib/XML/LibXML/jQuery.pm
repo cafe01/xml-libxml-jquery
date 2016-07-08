@@ -11,6 +11,8 @@ use Carp qw/ confess /;
 use JSON qw/ decode_json /;
 
 our $VERSION = "0.03";
+
+our @EXPORT_OK = qw/ j fn /;
 our @EXPORT = qw/ j /;
 
 use constant {
@@ -25,10 +27,30 @@ use constant {
 our ($PARSER);
 
 # plugin functions
-our %fn;
+my %fn;
 
 # for data()
 my $data = {};
+
+sub fn($$) {
+    my ($name, $sub) = @_;
+
+    die sprintf("fn '$name' already defined by %s (at %s line %s)", @{$fn{$name}->{caller}})
+        if exists $fn{$name};
+
+    $fn{$name} = {
+        sub => $sub,
+        caller => [caller]
+    };
+}
+
+
+
+#*j = \&jQuery;
+sub j {
+    __PACKAGE__->new(@_);
+}
+
 
 sub new {
     my ($class, $stuff, $before) = @_;
@@ -41,43 +63,46 @@ sub new {
         $existing_document = $self->{document};
     }
 
-    if (blessed $stuff) {
+    if (defined $stuff) {
 
-        if ($stuff->isa(__PACKAGE__)) {
-            $nodes = $stuff->{nodes};
+        if (blessed $stuff) {
+
+            if ($stuff->isa(__PACKAGE__)) {
+                $nodes = $stuff->{nodes};
+            }
+            elsif ($stuff->isa('XML::LibXML::Element')) {
+                $nodes = [$stuff];
+            }
+            else {
+                confess "can't handle this type of object: ".ref $stuff;
+            }
         }
-        elsif ($stuff->isa('XML::LibXML::Element')) {
-            $nodes = [$stuff];
+        elsif (ref $stuff eq 'ARRAY') {
+
+            $nodes = $stuff;
         }
         else {
-            confess "can't handle this type of object: ".ref $stuff;
+            # parse as string
+            if ($stuff =~ /^\s*<\?xml/) {
+                die "xml parsing disabled!";
+                $nodes = [ $PARSER->parse_string($stuff) ];
+            } else {
+                $nodes = [ _parse_html($stuff) ];
+            }
         }
-    }
-    elsif (ref $stuff eq 'ARRAY') {
 
-        $nodes = $stuff;
-    }
-    else {
-        # parse as string
-        if ($stuff =~ /^\s*<\?xml/) {
-            die "xml parsing disabled!";
-            $nodes = [ $PARSER->parse_string($stuff) ];
-        } else {
-            $nodes = [ _parse_html($stuff) ];
-        }
-    }
+        # catch bugs :)
+        confess "undefined node" if grep { !defined } @$nodes;
 
-    # catch bugs :)
-    confess "undefined node" if grep { !defined } @$nodes;
+        # adopt nodes to existing document
+        if ($existing_document) {
 
-    # adopt nodes to existing document
-    if ($existing_document) {
-
-        # my $doc_id = $existing_document->unique_key;
-        $existing_document->adoptNode($_)
+            # my $doc_id = $existing_document->unique_key;
+            $existing_document->adoptNode($_)
             for grep { not $existing_document->isSameNode($_->ownerDocument) }
-                grep { $_->nodeType != XML_DOCUMENT_NODE }
-                @$nodes;
+            grep { $_->nodeType != XML_DOCUMENT_NODE }
+            @$nodes;
+        }
     }
 
     my $document = defined $nodes->[0] ? $nodes->[0]->ownerDocument
@@ -93,12 +118,6 @@ sub new {
         nodes => $nodes,
         before => $before
     }, $class;
-}
-
-
-#*j = \&jQuery;
-sub j {
-    __PACKAGE__->new(@_);
 }
 
 sub _parse_html {
@@ -935,6 +954,23 @@ sub _is_selector {
     && length $_[0]
     && $_[0] !~ /<(?!!).*?>/
 }
+
+# TODO rethink this autoload thing... issues:
+# - global var is bad... spooky action at a distance;
+# - and if thats ok, we could just add the subref to the symbol table directly
+
+sub AUTOLOAD {
+    my $self = shift;
+    our $AUTOLOAD;
+    (my $method = $AUTOLOAD) =~ s/.*:://s;
+
+    die sprintf "unknown method '$method'"
+        unless ref $self && exists $fn{$method};
+
+    local $_ = $self;
+    $fn{$method}{sub}->(@_);
+}
+
 
 
 # decrement data ref counter, delete data when counter == 0

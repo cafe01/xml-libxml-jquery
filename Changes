@@ -2,6 +2,13 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
+    [COMPATIBILITY FIX]
+    - each() callback now receives an element instead of jQuery object
+
+    [EXPERIMENT]
+    - basic plugin system: method names AUTOLOADed from global %fn hash
+        - probably bad idea, too javascriptish... probably gonna use roles in the future
+
 0.03 2016-06-26T18:17:44Z
 
     - fixed before/after(content[, content]) signature
