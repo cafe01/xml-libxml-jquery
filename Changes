@@ -2,6 +2,9 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
+    [ BUG FIXES ]
+    - Undeclared dependency on Test::Exception (GH#1, reported by andk)
+
 0.04 2016-07-08T13:20:18Z
 
     [COMPATIBILITY FIX]

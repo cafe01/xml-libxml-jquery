@@ -100,8 +100,8 @@ sub new {
             # my $doc_id = $existing_document->unique_key;
             $existing_document->adoptNode($_)
             for grep { not $existing_document->isSameNode($_->ownerDocument) }
-            grep { $_->nodeType != XML_DOCUMENT_NODE }
-            @$nodes;
+                grep { $_->nodeType != XML_DOCUMENT_NODE }
+                @$nodes;
         }
     }
 
