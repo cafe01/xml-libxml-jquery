@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/cafe01/xml-libxml-jquery.svg?branch=master)](https://travis-ci.org/cafe01/xml-libxml-jquery)
+[![Build Status](https://travis-ci.org/cafe01/xml-libxml-jquery.svg?branch=master)](https://travis-ci.org/cafe01/xml-libxml-jquery) [![Coverage Status](https://img.shields.io/coveralls/cafe01/xml-libxml-jquery/master.svg?style=flat)](https://coveralls.io/r/cafe01/xml-libxml-jquery?branch=master)
 # NAME
 
 XML::LibXML::jQuery - Fast, jQuery-like DOM manipulation over XML::LibXML
