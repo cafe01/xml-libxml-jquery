@@ -2,6 +2,8 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
+0.06 2016-07-22T15:24:33Z
+
     * fixed document refcount decrement
 
 0.05 2016-07-11T23:34:49Z
