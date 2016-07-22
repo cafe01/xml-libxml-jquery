@@ -377,8 +377,10 @@ sub parent {
 
 sub clone {
     my ($self) = @_;
+    return $self unless @{$self->{nodes}};
+
     my @new = map { $_->cloneNode(1) } @{$self->{nodes}};
-    $self->new(\@new, $self);
+    (ref $self)->new(\@new, $self);
 }
 
 sub _node_matches {
@@ -447,6 +449,9 @@ sub _append_to {
         if ($node->isa('XML::LibXML::Document')) {
 
             foreach (@$content) {
+                confess "# Document->setDocumentElement: doc\n"
+                    if ref $_ eq 'XML::LibXML::Document';
+
                 $node->hasChildNodes ? $node->lastChild->addSibling($is_last ? $_ : $_->cloneNode(1))
                                      : $node->setDocumentElement($is_last ? $_ : $_->cloneNode(1));
             }
@@ -983,6 +988,10 @@ sub AUTOLOAD {
 # decrement data ref counter, delete data when counter == 0
 sub DESTROY {
     my $self = shift;
+
+    # Don't know why, but document is undefined in some situations..
+    # wiped out by XS code probably. 
+    return unless defined $self->{document};
 
     # decrement $data refcount
     my $doc_id = $self->{document}->unique_key;

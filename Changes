@@ -2,6 +2,9 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
+    * Now cheking if self->{document} is defined in DESTROY. It gets undefined
+      in some situations, probably wiped by XS code... :/
+
 0.06 2016-07-22T15:24:33Z
 
     * fixed document refcount decrement
