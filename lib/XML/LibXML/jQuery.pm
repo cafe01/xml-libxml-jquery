@@ -54,13 +54,13 @@ sub j {
 
 sub new {
     my ($class, $stuff, $before) = @_;
-    my ($self, $existing_document, $nodes);
+    my ($self, $document, $nodes);
 
     # instance method, reuse document
     if (ref $class) {
         $self = $class;
         $class = ref $self;
-        $existing_document = $self->{document};
+        $document = $self->{document};
     }
 
     if (defined $stuff) {
@@ -70,6 +70,7 @@ sub new {
             if ($stuff->isa(__PACKAGE__)) {
                 $nodes = $stuff->{nodes};
             }
+            # TODO this is too restrictive.. what about text, comment, other nodes?
             elsif ($stuff->isa('XML::LibXML::Element')) {
                 $nodes = [$stuff];
             }
@@ -77,7 +78,9 @@ sub new {
                 confess "can't handle this type of object: ".ref $stuff;
             }
         }
-        elsif (ref $stuff eq 'ARRAY') {
+        elsif (my $reftype = ref $stuff) {
+            confess "Only ArrayRef accepted. (not '$reftype')"
+                unless $reftype eq 'ARRAY';
 
             $nodes = $stuff;
         }
@@ -87,7 +90,7 @@ sub new {
                 die "xml parsing disabled!";
                 $nodes = [ $PARSER->parse_string($stuff) ];
             } else {
-                $nodes = [ _parse_html($stuff) ];
+                $nodes = _parse_html($stuff);
             }
         }
 
@@ -95,18 +98,22 @@ sub new {
         confess "undefined node" if grep { !defined } @$nodes;
 
         # adopt nodes to existing document
-        if ($existing_document) {
+        if ($document) {
 
             # my $doc_id = $existing_document->unique_key;
-            $existing_document->adoptNode($_)
-            for grep { not $existing_document->isSameNode($_->ownerDocument) }
-                grep { $_->nodeType != XML_DOCUMENT_NODE }
-                @$nodes;
+            $document->adoptNode($_)
+                for grep { not $document->isSameNode($_->ownerDocument) }
+                    grep { $_->nodeType != XML_DOCUMENT_NODE }
+                    @$nodes;
         }
     }
 
-    my $document = defined $nodes->[0] ? $nodes->[0]->ownerDocument
-                                       : XML::LibXML->createDocument;
+    # resolve document
+    unless ($document) {
+
+        $document = defined $nodes->[0] ? $nodes->[0]->ownerDocument
+                                        : XML::LibXML->createDocument;
+    }
 
     # increment document data refcount
     my $doc_id = $document->unique_key;
@@ -164,7 +171,7 @@ sub _parse_html {
         $nodes[0]->addSibling($_) foreach @nodes[1..$#nodes];
     }
 
-    @nodes;
+    \@nodes;
 }
 
 
@@ -977,11 +984,8 @@ sub AUTOLOAD {
 sub DESTROY {
     my $self = shift;
 
-    my $node = $self->{nodes}[0];
-    return unless $node;
-
     # decrement $data refcount
-    my $doc_id = $node->ownerDocument->unique_key;
+    my $doc_id = $self->{document}->unique_key;
     $data->{$doc_id}{refcount}--;
     # printf STDERR "[%s] decremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
 
