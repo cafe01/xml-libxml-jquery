@@ -2,9 +2,16 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
+    [ PERFORMANCE ]
+    * implemented method '_stuff_to_nodes'
+      - just the "node resolution" part of new()
+    * implemented method '_new_nodes'
+      - for faster blessing new jQuery object from nodes of the same document
+      - traversal methods now calling _new_nodes() instead of new()
+
 0.07 2016-07-22T16:10:17Z
 
-    * Now cheking if self->{document} is defined in DESTROY. It gets undefined
+    * Now checking if self->{document} is defined in DESTROY. It gets undefined
       in some situations, probably wiped by XS code... :/
 
 0.06 2016-07-22T15:24:33Z

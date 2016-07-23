@@ -23,9 +23,6 @@ is j($html)->find('div')->attr('class', sub {
     "$oldval-$i";
 })->as_html, '<div class="first">Hello</div><div class="second-1">Goodbye</div>', 'attr(name, function)';
 
-is j($html)->document->attr('foo', 'bar')->size, 1, 'set skips non-element node';
-is j($html)->document->attr('foo'), undef, 'get on non-element node';
 
 
 done_testing;
-

@@ -65,51 +65,29 @@ sub new {
 
     if (defined $stuff) {
 
-        if (blessed $stuff) {
-
-            if ($stuff->isa(__PACKAGE__)) {
-                $nodes = $stuff->{nodes};
-            }
-            # TODO this is too restrictive.. what about text, comment, other nodes?
-            elsif ($stuff->isa('XML::LibXML::Element')) {
-                $nodes = [$stuff];
-            }
-            else {
-                confess "can't handle this type of object: ".ref $stuff;
-            }
-        }
-        elsif (my $reftype = ref $stuff) {
-            confess "Only ArrayRef accepted. (not '$reftype')"
-                unless $reftype eq 'ARRAY';
-
-            $nodes = $stuff;
-        }
-        else {
-            # parse as string
-            if ($stuff =~ /^\s*<\?xml/) {
-                die "xml parsing disabled!";
-                $nodes = [ $PARSER->parse_string($stuff) ];
-            } else {
-                $nodes = _parse_html($stuff);
-            }
-        }
+        $nodes = _stuff_to_nodes($stuff);
 
         # catch bugs :)
-        confess "undefined node" if grep { !defined } @$nodes;
+        # confess "undefined node" if grep { !defined } @$nodes;
 
         # adopt nodes to existing document
-        if ($document) {
+        # - if its not in the same dorcument already
+        # - if its not a document node
+        # - testing only first node for better performance
+        if (defined $document
+            && defined $nodes->[0]
+            && $nodes->[0] ->nodeType != XML_DOCUMENT_NODE
+            && !$nodes->[0]->ownerDocument->isSameNode($document)) {
 
             # my $doc_id = $existing_document->unique_key;
-            $document->adoptNode($_)
-                for grep { not $document->isSameNode($_->ownerDocument) }
-                    grep { $_->nodeType != XML_DOCUMENT_NODE }
-                    @$nodes;
+            foreach my $n (@$nodes) {
+                $document->adoptNode($n);
+            }
         }
     }
 
     # resolve document
-    unless ($document) {
+    unless (defined $document) {
 
         $document = defined $nodes->[0] ? $nodes->[0]->ownerDocument
                                         : XML::LibXML->createDocument;
@@ -122,9 +100,73 @@ sub new {
 
     bless {
         document => $document,
+        document_id => $doc_id,
         nodes => $nodes,
         before => $before
     }, $class;
+}
+
+# faster instantiation for new nodes of the same document
+sub _new_nodes {
+    my ($self, $nodes, $before, $new_document) = @_;
+
+    my $doc_id = $new_document ? $new_document->unique_key
+                               : $self->{document_id};
+
+    $data->{$doc_id}{refcount}++;
+
+    bless {
+        document => $new_document || $self->{document},
+        document_id => $doc_id,
+        nodes    => $nodes,
+        before   => $before
+    }, ref $self;
+}
+
+sub _stuff_to_nodes {
+
+    my $reftype = ref $_[0];
+    my $nodes;
+
+    # string
+    if (not $reftype) {
+
+        # parse as xml
+        if ($_[0] =~ /^\s*<\?xml/) {
+
+            $nodes = [ $PARSER->parse_string($_[0]) ];
+        # parse as html
+        } else {
+            $nodes = _parse_html($_[0]);
+        }
+    }
+
+    # arrayref
+    elsif ($reftype eq 'ARRAY') {
+
+        $nodes = $_[0];
+    }
+
+    # object
+    elsif (blessed $_[0]) {
+
+        if ($_[0]->isa(__PACKAGE__)) {
+            $nodes = $_[0]->{nodes};
+        }
+        # TODO this is too restrictive.. what about text, comment, other nodes?
+        elsif ($_[0]->isa('XML::LibXML::Element')) {
+            $nodes = [$_[0]];
+        }
+        else {
+            confess "Can't handle this type of object: '$reftype'";
+        }
+    }
+    else {
+
+        confess "Can't handle this type of data: '$reftype'";
+    }
+
+    $nodes;
 }
 
 sub _parse_html {
@@ -182,7 +224,7 @@ sub get {
 
 sub eq {
     my ($self, $i) = @_;
-    $self->new([ $self->{nodes}[$i] || () ], $self);
+    $self->_new_nodes([ $self->{nodes}[$i] || () ], $self);
 }
 
 
@@ -192,23 +234,24 @@ sub end {
 
 sub document {
     my $self = shift;
-    $self->new([ $self->{document} ], $self);
+    $self->_new_nodes([ $self->{document} ], $self);
 }
 
 sub tagname {
     my $self = shift;
-    return unless @{$self->{nodes}};
-    $self->{nodes}[0]->localname;
+    defined $self->{nodes}[0]
+        ? $self->{nodes}[0]->localname
+        : undef;
 }
 
 sub first {
     my $self = shift;
-    $self->new([ $self->{nodes}[0] || () ], $self);
+    $self->_new_nodes([ $self->{nodes}[0] || () ], $self);
 }
 
 sub last {
     my $self = shift;
-    $self->new([ $self->{nodes}[-1] || () ], $self);
+    $self->_new_nodes([ $self->{nodes}[-1] || () ], $self);
 }
 
 sub serialize {
@@ -319,7 +362,7 @@ sub children {
         map { $xpath ? $_->findnodes($xpath) : $_->childNodes }
         @{$self->{nodes}};
 
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 sub find {
@@ -330,13 +373,13 @@ sub find {
         map { $_->findnodes($xpath) }
         @{$self->{nodes}};
 
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 sub xfind {
     my ($self, $xpath) = @_;
     my @new = map { $_->findnodes($xpath) } @{$self->{nodes}};
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 sub filter {
@@ -346,7 +389,7 @@ sub filter {
     my @new = map { _node_matches($_, $xpath) ? $_ : () }
         map { $_->nodeType == XML_ELEMENT_NODE ? $_ : () } @{$self->{nodes}};
 
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 sub xfilter {
@@ -355,7 +398,7 @@ sub xfilter {
     my @new = map { _node_matches($_, $xpath) ? $_ : () }
         map { $_->nodeType == XML_ELEMENT_NODE ? $_ : () } @{$self->{nodes}};
 
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 sub parent {
@@ -372,15 +415,16 @@ sub parent {
     grep { defined }
     map { $_->parentNode } @{$self->{nodes}};
 
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 sub clone {
     my ($self) = @_;
     return $self unless @{$self->{nodes}};
 
-    my @new = map { $_->cloneNode(1) } @{$self->{nodes}};
-    (ref $self)->new(\@new, $self);
+    my @clones = map { $_->cloneNode(1) } @{$self->{nodes}};
+    # when cloning a document node, pass it as the new jQuery document (3rd arg)
+    $self->_new_nodes(\@clones, $self, $clones[0]->nodeType == XML_DOCUMENT_NODE ? $clones[0] : () );
 }
 
 sub _node_matches {
@@ -426,13 +470,15 @@ sub each {
 
 sub append {
     my $self = shift;
-    _append_to($self->new(@_)->{nodes}, $self->{nodes});
+    my $nodes = _stuff_to_nodes($_[0]);
+    _append_to($nodes, $self->{nodes});
     $self;
 }
 
 sub append_to {
     my $self = shift;
-    _append_to($self->{nodes}, (ref $self)->new(@_)->{nodes});
+    my $nodes = _stuff_to_nodes($_[0]);
+    _append_to($self->{nodes}, $nodes);
     $self;
 }
 
@@ -631,7 +677,7 @@ sub _insert_after {
 sub contents {
     my $self = shift;
     my @new = map { $_->childNodes } @{$self->{nodes}};
-    $self->new(\@new, $self);
+    $self->_new_nodes(\@new, $self);
 }
 
 {
@@ -647,7 +693,7 @@ sub remove {
         return $self;
     }
 
-    foreach (@{$self->{nodes }}) {
+    foreach (@{$self->{nodes}}) {
         # TODO test when there is no parent node
         $_->parentNode->removeChild($_);
     }
@@ -696,12 +742,13 @@ sub replace_with {
             $parent->removeChild($node);
         }
         else {
-            my $new_node = shift @items;
-            $parent->replaceChild($new_node, $node);
-            foreach (@items) {
-                $parent->insertAfter($_, $new_node);
-                $new_node = $_;
+            # my $new_node = shift @items;
+            # $parent->replaceChild($new_node, $node);
+            foreach (reverse @items) {
+                $parent->insertAfter($_, $node);
+                # $new_node = $_;
             }
+            $parent->removeChild($node);
         }
 
     }
@@ -716,7 +763,7 @@ sub attr {
     return unless defined $attr_name;
 
     # only element nodes
-    my @nodes = map { $_->nodeType == XML_ELEMENT_NODE ? $_ : () } @{$self->{nodes}};
+    my @nodes = @{$self->{nodes}};
 
     # get
     return $nodes[0] ? $nodes[0]->getAttribute(lc $attr_name) : undef
@@ -942,17 +989,16 @@ sub _convert_data_attr_value {
 
 
 
-sub _decamelize
-{
-        my $s = shift;
-        $s =~ s{([^a-zA-Z]?)([A-Z]*)([A-Z])([a-z]?)}{
-                my $fc = pos($s)==0;
-                my ($p0,$p1,$p2,$p3) = ($1,lc$2,lc$3,$4);
-                my $t = $p0 || $fc ? $p0 : '_';
-                $t .= $p3 ? $p1 ? "${p1}_$p2$p3" : "$p2$p3" : "$p1$p2";
-                $t;
-        }ge;
-        $s;
+sub _decamelize {
+    my $s = shift;
+    $s =~ s{([^a-zA-Z]?)([A-Z]*)([A-Z])([a-z]?)}{
+            my $fc = pos($s)==0;
+            my ($p0,$p1,$p2,$p3) = ($1,lc$2,lc$3,$4);
+            my $t = $p0 || $fc ? $p0 : '_';
+            $t .= $p3 ? $p1 ? "${p1}_$p2$p3" : "$p2$p3" : "$p1$p2";
+            $t;
+    }ge;
+    $s;
 }
 
 sub _camelize {
@@ -990,11 +1036,11 @@ sub DESTROY {
     my $self = shift;
 
     # Don't know why, but document is undefined in some situations..
-    # wiped out by XS code probably. 
-    return unless defined $self->{document};
+    # wiped out by XS code probably.
+    return unless defined $self->{document_id};
 
     # decrement $data refcount
-    my $doc_id = $self->{document}->unique_key;
+    my $doc_id = $self->{document_id};
     $data->{$doc_id}{refcount}--;
     # printf STDERR "[%s] decremented document %d data ref count: %d\n", __PACKAGE__, $doc_id, $data->{$doc_id}{refcount};
 
