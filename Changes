@@ -2,6 +2,8 @@ Revision history for Perl extension XML::LibXML::jQuery
 
 {{$NEXT}}
 
+0.08 2016-07-23T17:52:05Z
+
     [ PERFORMANCE ]
     * implemented method '_stuff_to_nodes'
       - just the "node resolution" part of new()

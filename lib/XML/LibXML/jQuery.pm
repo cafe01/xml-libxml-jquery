@@ -10,7 +10,7 @@ use HTML::Selector::XPath qw/selector_to_xpath/;
 use Carp qw/ confess /;
 use JSON qw/ decode_json /;
 
-our $VERSION = "0.07";
+our $VERSION = "0.08";
 
 our @EXPORT_OK = qw/ j fn /;
 our @EXPORT = qw/ j /;
